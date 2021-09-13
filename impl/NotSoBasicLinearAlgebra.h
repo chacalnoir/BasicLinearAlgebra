@@ -195,6 +195,83 @@ Matrix<dim> LUSolve(const LUDecomposition<dim, MemT1> &decomp, const Matrix<dim,
     return x;
 }
 
+template <int N>
+struct CholeskyDecomposition
+{
+    bool positive_definite = true;
+    float diagonal[N];
+    Matrix<N, N> &A;
+
+    CholeskyDecomposition(Matrix<N, N> &A_) : A(A_) {}
+};
+
+template <int N>
+CholeskyDecomposition<N> CholeskyDecompose(Matrix<N, N> &A)
+{
+    CholeskyDecomposition<N> chol(A);
+
+    for (int i = 0; i < N; ++i)
+    {
+        for (int j = i; j < N; ++j)
+        {
+            float sum = A(i, j);
+
+            for (int k = i - 1; k >= 0; --k)
+            {
+                sum -= A(i, k) * A(j, k);
+            }
+
+            if (i == j)
+            {
+                if (sum <= 0.0)
+                {
+                    chol.positive_definite = false;
+                    return chol;
+                }
+                chol.diagonal[i] = std::sqrt(sum);
+            }
+            else
+            {
+                A(j, i) = sum / chol.diagonal[i];
+            }
+        }
+    }
+
+    return chol;
+}
+
+template <int N>
+Matrix<N> Solve(const CholeskyDecomposition<N> chol, const Matrix<N> &b)
+{
+    Matrix<N> x;
+
+    for (int i = 0; i < N; ++i)
+    {
+        float sum = b(i);
+
+        for (int k = i - 1; k >= 0; --k)
+        {
+            sum -= chol.A(i, k) * x(k);
+        }
+
+        x(i) = sum / chol.diagonal[i];
+    }
+
+    for (int i = N - 1; i >= 0; --i)
+    {
+        float sum = x(i);
+
+        for (int k = i + 1; k < N; ++k)
+        {
+            sum -= chol.A(k, i) * x(k);
+        }
+
+        x(i) = sum / chol.diagonal[i];
+    }
+
+    return x;
+}
+
 template <int dim, class MemT>
 bool Invert(const Matrix<dim, dim, MemT> &A, Matrix<dim, dim, MemT> &out)
 {
