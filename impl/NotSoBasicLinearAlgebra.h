@@ -33,13 +33,13 @@ struct LUDecomposition
 };
 
 template <int dim, class MemT>
-LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
+LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A, int subdim = dim)
 {
     LUDecomposition<dim, MemT> decomp(A);
     auto &idx = decomp.permutation.idx;
     decomp.parity = 1.0;
 
-    for (int i = 0; i < dim; ++i)
+    for (int i = 0; i < subdim; ++i)
     {
         idx[i] = i;
     }
@@ -47,12 +47,12 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
     // row_scale stores the implicit scaling of each row
     typename MemT::elem_t row_scale[dim];
 
-    for (int i = 0; i < dim; ++i)
+    for (int i = 0; i < subdim; ++i)
     {
         // Loop over rows to get the implicit scaling information.
         typename MemT::elem_t largest_elem = 0.0;
 
-        for (int j = 0; j < dim; ++j)
+        for (int j = 0; j < subdim; ++j)
         {
             typename MemT::elem_t this_elem = fabs(A(i, j));
             largest_elem = max(this_elem, largest_elem);
@@ -69,7 +69,7 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
     }
 
     // This is the loop over columns of Crout’s method.
-    for (int j = 0; j < dim; ++j)
+    for (int j = 0; j < subdim; ++j)
     {
         // Calculate beta ij
         for (int i = 0; i < j; ++i)
@@ -85,7 +85,7 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
         }
 
         // Calcuate alpha ij (before division by the pivot)
-        for (int i = j; i < dim; ++i)
+        for (int i = j; i < subdim; ++i)
         {
             typename MemT::elem_t sum = 0.0;
 
@@ -101,7 +101,7 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
         typename MemT::elem_t largest_elem = 0.0;
         int argmax = j;
 
-        for (int i = j; i < dim; i++)
+        for (int i = j; i < subdim; i++)
         {
             typename MemT::elem_t this_elem = row_scale[i] * fabs(A(i, j));
 
@@ -114,7 +114,7 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
 
         if (j != argmax)
         {
-            for (int k = 0; k < dim; ++k)
+            for (int k = 0; k < subdim; ++k)
             {
                 bla_swap(A(argmax, k), A(j, k));
             }
@@ -131,12 +131,12 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
             return decomp;
         }
 
-        if (j != dim)
+        if (j != subdim)
         {
             // Now, finally, divide by the pivot element.
             typename MemT::elem_t pivot_inv = 1.0 / A(j, j);
 
-            for (int i = j + 1; i < dim; ++i)
+            for (int i = j + 1; i < subdim; ++i)
             {
                 A(i, j) *= pivot_inv;
             }
@@ -149,7 +149,8 @@ LUDecomposition<dim, MemT> LUDecompose(Matrix<dim, dim, MemT> &A)
 
 template <int dim, class MemT1, class MemT2>
 ArrayMatrix<dim, 1, typename MemT2::elem_t> LUSolve(const LUDecomposition<dim, MemT1> &decomp,
-                                                    const Matrix<dim, 1, MemT2> &b)
+                                                    const Matrix<dim, 1, MemT2> &b,
+                                                    int subdim = dim)
 {
     ArrayMatrix<dim, 1, typename MemT2::elem_t> x, tmp;
 
@@ -157,7 +158,7 @@ ArrayMatrix<dim, 1, typename MemT2::elem_t> LUSolve(const LUDecomposition<dim, M
     auto &LU = decomp.lower.parent;
 
     // Forward substitution to solve L * y = b
-    for (int i = 0; i < dim; ++i)
+    for (int i = 0; i < subdim; ++i)
     {
         typename MemT2::elem_t sum = 0.0;
 
@@ -170,11 +171,11 @@ ArrayMatrix<dim, 1, typename MemT2::elem_t> LUSolve(const LUDecomposition<dim, M
     }
 
     // Backward substitution to solve U * x = y
-    for (int i = dim - 1; i >= 0; --i)
+    for (int i = subdim - 1; i >= 0; --i)
     {
         typename MemT2::elem_t sum = 0.0;
 
-        for (int j = i + 1; j < dim; ++j)
+        for (int j = i + 1; j < subdim; ++j)
         {
             sum += LU(i, j) * tmp(idx[j]);
         }
@@ -183,7 +184,7 @@ ArrayMatrix<dim, 1, typename MemT2::elem_t> LUSolve(const LUDecomposition<dim, M
     }
 
     // Undo the permutation
-    for (int i = 0; i < dim; ++i)
+    for (int i = 0; i < subdim; ++i)
     {
         x(i) = tmp(idx[i]);
     }
@@ -192,11 +193,11 @@ ArrayMatrix<dim, 1, typename MemT2::elem_t> LUSolve(const LUDecomposition<dim, M
 }
 
 template <int dim, class MemT>
-bool Invert(const Matrix<dim, dim, MemT> &A, Matrix<dim, dim, MemT> &out)
+bool Invert(const Matrix<dim, dim, MemT> &A, Matrix<dim, dim, MemT> &out, int subdim = dim)
 {
     ArrayMatrix<dim, dim, typename MemT::elem_t> A_copy = A;
 
-    auto decomp = LUDecompose(A_copy);
+    auto decomp = LUDecompose(A_copy, subdim);
 
     if (decomp.singular)
     {
@@ -205,10 +206,10 @@ bool Invert(const Matrix<dim, dim, MemT> &A, Matrix<dim, dim, MemT> &out)
 
     ArrayMatrix<dim, 1, typename MemT::elem_t> b = Zeros<dim>();
 
-    for (int j = 0; j < dim; ++j)
+    for (int j = 0; j < subdim; ++j)
     {
         b(j) = 1.0;
-        out.Column(j) = LUSolve(decomp, b);
+        out.Column(j) = LUSolve(decomp, b, subdim);
         b(j) = 0.0;
     }
 
@@ -216,16 +217,16 @@ bool Invert(const Matrix<dim, dim, MemT> &A, Matrix<dim, dim, MemT> &out)
 }
 
 template <int dim, class MemT>
-bool Invert(Matrix<dim, dim, MemT> &A)
+bool Invert(Matrix<dim, dim, MemT> &A, int subdim = dim)
 {
-    return Invert(A, A);
+    return Invert(A, A, subdim);
 }
 
 template <int dim, class MemT>
-Matrix<dim, dim, MemT> Inverse(const Matrix<dim, dim, MemT> &A)
+Matrix<dim, dim, MemT> Inverse(const Matrix<dim, dim, MemT> &A, bool &succeeded, int subdim = dim)
 {
     ArrayMatrix<dim, dim, typename MemT::elem_t> out;
-    Invert(A, out);
+    succeeded = Invert(A, out, subdim);
     return out;
 }
 
